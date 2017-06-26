@@ -80,6 +80,9 @@ public class Deck {
 		}
 		return hand;
 	}
+	public String toString() {
+		return cards.toString();
+	}
 	
 	
 }	

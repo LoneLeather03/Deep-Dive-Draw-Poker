@@ -12,6 +12,16 @@ import java.util.Arrays;
  */
 public class Hand implements Comparable<Hand> {
 	
+	public static final int DEFAULT_HAND_SIZE = 5;
+	private static final int FULL_HOUSE_VALUE = 6;
+	private static final int FOUR_OF_A_KIND_VALUE = 7;
+	private static final int FLUSH_VALUE = 5;
+	private static final int STRAIGHT_VALUE = 4;
+	private static final int THREE_OF_A_KIND_VALUE = 3;
+	private static final int HIGH_CARD_VALUE = 0;
+	private static final int PAIR_VALUE = 1;
+	private static final int TWO_PAIR_VALUE = 2;
+	private static final int STRAIGHT_FLUSH_VALUE = 8;
 	private final Deck deck;
 	private final int size;
 	private final ArrayList<Card> cards;
@@ -20,14 +30,29 @@ public class Hand implements Comparable<Hand> {
 	 * @param deck Source of cards in the hand.
 	 * @param size Number of cards drawn for the hand.
 	 */
-	public Hand(Deck deck, int size) {
+	protected Hand(Deck deck, int size) {
 		this.deck = deck;
 		this.size = size;
 		cards = new ArrayList<>(Arrays.asList(deck.draw(size)));
 	}
-
+	/**
+	 * Initialize the hand with {@link #DEFAULT_HAND_SIZE DEFAULT_HAND_SIZE} cards
+	 * @param deck		Source of cards in the hand.
+	 * */
+	public Hand(Deck deck) {
+		this(deck, DEFAULT_HAND_SIZE);
+	}
+	
 	@Override
-	public int compareTo(Hand arg0) {
+	public int compareTo(Hand otherHand) {
+		int[] value = this.value();
+		int[] otherValue = otherHand.value();
+		for (int i = 0; i < Math.min(value.length, otherValue.length); i++) {
+			int comparison = Integer.compare(value[i], otherValue[i]);
+			if (comparison != 0) {
+				return comparison;
+			}
+		}
 		// TODO Auto-generated method stub
 		return 0;
 	}
@@ -88,7 +113,197 @@ public class Hand implements Comparable<Hand> {
 		return result;
 	}
 	
-	private Card.Rank 
+	private Card.Rank run(Card[][] table, boolean lowHigh) {
+		Card.Rank runStart = null;
+		int runLength = 0;
+		boolean inRun = false;
+		for (Card.Rank rank : Card.Rank.values()) {
+			if (table[rank.ordinal()].length == 1) {
+			if (!inRun) {
+				runStart = rank;
+				runLength = 0;
+				inRun = true;
+			}
+			
+			runLength++;
+			
+			} else {
+				inRun = false;
+			}
+		}
+			if (inRun && lowHigh && table[0].length == 1) {
+				runLength ++;
+			}
+			
+			return (runLength == size) ? runStart : null;
+	}
+	private Card.Rank run(Card[][] table) {
+		return run(table, true);
+		
+		}
+	private int[] value() {
+		Card[][] byRanks = this.byRanks();
+		Card[][] bySuits = this.bySuits();
+		boolean flush = this.flush(bySuits);
+		Card.Rank straightStart = this.run(byRanks);
+		boolean straightFlush = flush && (straightStart != null);
+		ArrayList<Card.Rank> fourOfAKindRanks = this.sets(byRanks, 4);
+		ArrayList<Card.Rank> threeOfAKindRanks = this.sets(byRanks, 3);
+		ArrayList<Card.Rank> twoOfAKindRanks = this.sets(byRanks, 2);
+		ArrayList<Card.Rank> oneOfAKindRanks = this.sets(byRanks, 1);
+		boolean fullHouse = (threeOfAKindRanks.size() > 0) && (twoOfAKindRanks.size() > 0);
+		boolean twoPair = (twoOfAKindRanks.size() == 2);
+		
+		// Check for straight flush.
+		if (straightFlush) {
+			return straightFlushValue(straightStart);
+		}
+		
+		// Check for four of a kind.
+		if (fourOfAKindRanks.size() > 0) {
+			return fourOfAKindValue(fourOfAKindRanks, oneOfAKindRanks);
+		  }
+		
+		// Check for full house.
+		if (fullHouse) {
+			return fullHouseValue(threeOfAKindRanks);
+			}
+		
+		// Check for flush.
+			if (flush) {
+				return flushValue();
+			}
+			
+			// Check for straight.
+			if (straightStart != null) {
+				return straightValue(straightStart);
+			}
+			
+			// Check for three of a kind.
+			if (threeOfAKindRanks.size() > 0) {
+				return threeOfAKindValue(threeOfAKindRanks);
+			}
+			
+			// Check for two pair.
+			if (twoPair) {
+				return twoPairValue(twoOfAKindRanks, oneOfAKindRanks);
+			}
+			
+			// Check for two of a kind.
+			if (twoOfAKindRanks.size() > 0) {
+				return twoOfAKindValue(twoOfAKindRanks, oneOfAKindRanks);
+			}
+			// EVERYTHING ELSE!!!
+			
+			return highCardValue();
+		}
+
+	private int[] straightFlushValue(Card.Rank straightStart) {
+		return new int[] {STRAIGHT_FLUSH_VALUE, straightStart.ordinal()};
+	}
+
+	private int[] fourOfAKindValue(ArrayList<Card.Rank> fourOfAKindRanks, ArrayList<Card.Rank> oneOfAKindRanks) {
+		int setRank = fourOfAKindRanks.get(0).ordinal();
+		if (setRank == 0) {
+			setRank = Card.Rank.values().length;
+		}
+		return new int[] {FOUR_OF_A_KIND_VALUE, setRank, oneOfAKindRanks.get(0).ordinal()};
+	}
+
+	private int[] fullHouseValue(ArrayList<Card.Rank> threeOfAKindRanks) {
+		int overSetRank = threeOfAKindRanks.get(0).ordinal();
+		if (overSetRank == 0) {
+			overSetRank = Card.Rank.values().length;
+}
+		int underSetRank = threeOfAKindRanks.get(0).ordinal();
+		if (underSetRank == 0) {
+			underSetRank = Card.Rank.values().length;
+}
+		return new int[] {FULL_HOUSE_VALUE, overSetRank, underSetRank};
+	}
+
+	private int[] flushValue() {
+		int[] ranks = new int[size];
+		for (int i = 0; i < size; i++) {
+			int cardRank = cards.get(i).rank.ordinal();
+			if (cardRank == 0) {
+				cardRank = Card.Rank.values().length;
+			}
+			ranks[i] = cardRank;
+		}
+		Arrays.sort(ranks);
+		int[] score = new int[size + 1];
+		score[0] = FLUSH_VALUE;
+		for (int i = size - 1; i >= 0; i--) {
+			score[size - i] = ranks[i];
+		}
+		return score;
+	}
+
+	private int[] straightValue(Card.Rank straightStart) {
+		return new int[] {STRAIGHT_VALUE, straightStart.ordinal()};
+	}
+
+	private int[] threeOfAKindValue(ArrayList<Card.Rank> threeOfAKindRanks) {
+		int setRank = threeOfAKindRanks.get(0).ordinal();
+		if (setRank == 0) {
+			setRank = Card.Rank.values().length;
+		}
+		return new int[] {THREE_OF_A_KIND_VALUE, setRank};
+	}
+
+	private int[] twoOfAKindValue(ArrayList<Card.Rank> twoOfAKindRanks, ArrayList<Card.Rank> oneOfAKindRanks) {
+		int setRank = twoOfAKindRanks.get(0).ordinal();
+		if (setRank == 0) {
+			setRank = Card.Rank.values().length;
+		}
+		int[] ranks = new int[size - 2];
+		for (int i = 0; i < oneOfAKindRanks.size(); i++) {
+			int cardRank = oneOfAKindRanks.get(i).ordinal();
+			if (cardRank == 0) {
+				cardRank = Card.Rank.values().length;
+			}
+			ranks[i] = cardRank;
+		}
+		Arrays.sort(ranks);
+		int[] score = new int[size];
+		score[0] = PAIR_VALUE;
+		score[1] = setRank;
+		for (int i = ranks.length - 1; i >= 0; i--) {
+			score[ranks.length - i + 1] = ranks[i];
+		}
+		return score;
+	}
+
+	private int[] highCardValue() {
+		int[] ranks = new int[size];
+		for (int i = 0; i < size; i++) {
+			int cardRank = cards.get(i).rank.ordinal();
+			if (cardRank == 0) {
+				cardRank = Card.Rank.values().length;
+			}
+			ranks[i] = cardRank;
+		}
+		Arrays.sort(ranks);
+		int[] score = new int[size + 1];
+		score[0] = HIGH_CARD_VALUE;
+		for (int i = size - 1; i >= 0; i--) {
+			score[size - i] = ranks[i];
+		}
+		return score;
+	}
+
+	private int[] twoPairValue(ArrayList<Card.Rank> twoOfAKindRanks, ArrayList<Card.Rank> oneOfAKindRanks) {
+		int firstRank = twoOfAKindRanks.get(0).ordinal();
+		int secondRank = twoOfAKindRanks.get(1).ordinal();
+		int otherRank = oneOfAKindRanks.get(0).ordinal();
+		if (firstRank == 0) {
+			return new int[] {TWO_PAIR_VALUE, Card.Rank.values().length, secondRank, otherRank};
+		} else {
+			return new int[] {TWO_PAIR_VALUE, secondRank, firstRank, otherRank};
+		}
+	}
+	}
 	
 
-}
+
